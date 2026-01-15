@@ -112,8 +112,12 @@ class MCPClient:
     async def chat_loop(self):
         """Run an interactive chat loop"""
         print("\nMCP Client Started!")
-        print("Type your queries or 'quit' to exit.")
 
+        print("Reading and listing all resources from the server...")
+        await self.list_and_read_resources(self.session)
+
+
+        print("Type your queries or 'quit' to exit.")
         while True:
             try:
                 query = input("\nQuery: ").strip()
@@ -130,6 +134,48 @@ class MCPClient:
     async def cleanup(self):
         """Clean up resources"""
         await self.exit_stack.aclose()
+
+
+    async def list_resource_templates(self, session: ClientSession):
+        # Ask the server for all resources
+        response = await session.list_resource_templates()
+        resources = response.resourceTemplates # list of Resource objects
+
+        print("\n=== Available Resource Templates ===")
+        for r in resources:
+            print(f"URI: {r.uriTemplate}, name: {r.name}, description: {r.description}")
+        return resources
+
+    async def list_resources(self, session: ClientSession):
+        # Ask the server for all resources
+        response = await session.list_resources()
+        resources = response.resources  # list of Resource objects
+
+        print("\n=== Available Resources ===")
+        for r in resources:
+            print(f"URI: {r.uri}, name: {r.name}, description: {r.description}")
+        return resources
+    
+    async def read_resource(self, session: ClientSession, uri: str):
+        try:
+            # This makes a `resources/read` request for that specific URI
+            content, mime_type = await session.read_resource(uri)
+
+            print(f"\n--- Resource Content: {uri} ---")
+            print(f"MIME type: {mime_type}")
+            print(content)   # text for text resources
+
+        except Exception as e:
+            print(f"Failed to read resource {uri}: {e}")
+
+    async def list_and_read_resources(self, session: ClientSession):
+        resource_templates = await self.list_resource_templates(session)
+        resources = await self.list_resources(session)
+
+        for r in resources:
+            # Read and print each resource
+            await self.read_resource(session, r.uri)
+
 
 async def main(): 
     path_to_server_script = "mcp_server.py"  
