@@ -1,8 +1,11 @@
 from typing import Any
 
 import httpx
-from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp import FastMCP, Context
+from mcp.server.elicitation import AcceptedElicitation, DeclinedElicitation, CancelledElicitation
 from mcp.server.fastmcp.prompts import base
+
+from pydantic import BaseModel, Field
 
 # Initialize FastMCP server
 mcp = FastMCP("weather")
@@ -34,24 +37,40 @@ Description: {props.get("description", "No description available")}
 Instructions: {props.get("instruction", "No specific instructions provided")}
 """
 
+class Confirm(BaseModel):
+    """Model for confirmation elicitation."""
+    confirmed: bool = Field(..., description="Whether the user confirmed the action.")
+
 @mcp.tool()
-async def get_alerts(state: str) -> str:
+async def get_alerts(state: str, ctx: Context) -> str:
     """Get weather alerts for a US state.
 
     Args:
         state: Two-letter US state code (e.g. CA, NY)
     """
-    url = f"{NWS_API_BASE}/alerts/active/area/{state}"
-    data = await make_nws_request(url)
 
-    if not data or "features" not in data:
-        return "Unable to fetch alerts or no alerts found."
+    result = await ctx.elicit(
+        message=f"Do you want to fetch weather alerts for the state '{state}'? (yes/no)",
+        schema=Confirm,
+    )
+    if isinstance(result, AcceptedElicitation):
+        if result.data.confirmed is False:
+            return "User declined to fetch alerts."
+        else:   
+            url = f"{NWS_API_BASE}/alerts/active/area/{state}"
+            data = await make_nws_request(url)
 
-    if not data["features"]:
-        return "No active alerts for this state."
+            if not data or "features" not in data:
+                return "Unable to fetch alerts or no alerts found."
 
-    alerts = [format_alert(feature) for feature in data["features"]]
-    return "\n---\n".join(alerts)
+            if not data["features"]:
+                return "No active alerts for this state."
+
+            alerts = [format_alert(feature) for feature in data["features"]]
+            answer = "\n---\n".join(alerts)
+    else:
+        answer = "Operation cancelled by user."
+    return answer
 
 
 @mcp.tool()

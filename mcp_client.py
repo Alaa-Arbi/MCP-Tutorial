@@ -1,9 +1,12 @@
 import asyncio
-from typing import Optional
+from typing import Any, Optional
 from contextlib import AsyncExitStack
 
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
+from mcp.types import ElicitResult
+from mcp.shared.context import RequestContext
+from mcp.types import ElicitRequestParams
 
 from openai import OpenAI
 from dotenv import load_dotenv
@@ -38,14 +41,36 @@ class MCPClient:
 
         stdio_transport = await self.exit_stack.enter_async_context(stdio_client(server_params))
         self.stdio, self.write = stdio_transport
-        self.session = await self.exit_stack.enter_async_context(ClientSession(self.stdio, self.write))
+        self.session = await self.exit_stack.enter_async_context(ClientSession(self.stdio, self.write, elicitation_callback=self.handle_elicitation))
 
         await self.session.initialize()
+
 
         # List available tools
         response = await self.session.list_tools()
         tools = response.tools
         print("\nConnected to server with tools:", [tool.name for tool in tools])
+
+    async def handle_elicitation(self, context: RequestContext[ClientSession, Any], request: ElicitRequestParams)-> ElicitResult:
+        """
+        request.message: human-friendly text from server
+        request.requestedSchema: JSON schema definition
+        """
+        print("\n⚠️ Server is asking for confirmation:")
+        print(request.message)
+
+        print("Type 'yes' to confirm, 'no' to decline, or 'cancel':")
+        answer = input("> ").strip().lower()
+
+        if answer == "yes":
+            return ElicitResult(action="accept", content={"confirmed": True})
+
+        if answer == "no":
+            return ElicitResult(action="accept", content={"confirmed": False})
+
+        # Any other input => cancel
+        return ElicitResult(action="cancel")
+
 
     async def process_query(self, query: str) -> str:
         """Process a query using Claude and available tools"""
