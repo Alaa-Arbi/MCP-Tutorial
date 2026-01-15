@@ -2,6 +2,7 @@ from typing import Any
 
 import httpx
 from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp.prompts import base
 
 # Initialize FastMCP server
 mcp = FastMCP("weather")
@@ -103,6 +104,9 @@ async def get_station_ids() -> str:
     
     return """["STN001", "STN002", "STN003"]"""
 
+@mcp.prompt()
+async def weather_summary_prompt(city: str)->str:
+    return f"You are a weather assistant. Use station data and weather tools to answer accurately. Provide a weather summary for {city} using tools like get_forecast and get_alert."
 
 def main():
     # Initialize and run the server

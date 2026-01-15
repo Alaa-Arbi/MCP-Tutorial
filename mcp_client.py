@@ -109,6 +109,15 @@ class MCPClient:
 
         return "\n".join(final_text)
     
+    async def get_and_run_prompt(self, name, args):
+        prompt_def = await self.session.get_prompt(name=name, arguments=args)
+        query = prompt_def.messages[0].content.text
+        try:
+            response = await self.process_query(query)
+            print("\n" + response)
+        except Exception as e:
+            print(f"\nError: {str(e)}")
+    
     async def chat_loop(self):
         """Run an interactive chat loop"""
         print("\nMCP Client Started!")
@@ -116,11 +125,19 @@ class MCPClient:
         print("Reading and listing all resources from the server...")
         await self.list_and_read_resources(self.session)
 
+        print("Listing available prompts from the server...")
+        await self.list_prompts()
 
         print("Type your queries or 'quit' to exit.")
         while True:
             try:
+
                 query = input("\nQuery: ").strip()
+
+                if query.startswith("/weather_summary_prompt"):
+                    _, city = query.split(" ", 1)
+                    await self.get_and_run_prompt("weather_summary_prompt", {"city": city})
+                    continue
 
                 if query.lower() == 'quit':
                     break
@@ -135,6 +152,10 @@ class MCPClient:
         """Clean up resources"""
         await self.exit_stack.aclose()
 
+    async def list_prompts(self):
+        result = await self.session.list_prompts()
+        for p in result.prompts:
+            print(p.name, "-", p.description, p.arguments)
 
     async def list_resource_templates(self, session: ClientSession):
         # Ask the server for all resources
